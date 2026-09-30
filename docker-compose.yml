@@ -1,0 +1,28 @@
+
+services:
+  jane_doe:
+    build: .
+    container_name: ki_jane_doe
+    stdin_open: true
+    tty: true
+    networks:
+      ki_network:
+        ipv4_address: 172.20.0.10
+    ports:
+      - "5000:5000"
+
+  john_doe:
+    build: .
+    container_name: ki_john_doe
+    stdin_open: true
+    tty: true
+    networks:
+      ki_network:
+        ipv4_address: 172.20.0.11
+
+networks:
+  ki_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
