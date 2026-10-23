@@ -1,14 +1,26 @@
-# Python
+# Python bytecode & cache
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
 .Python
+
+# Virtual environments
 env/
 venv/
+ENV/
 .env
 
-# Tooling
+# Tooling and analysis cache
 graphify-out/
 .graphify*
 cache/
+
+# OS and Editor metadata
+.directory
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
