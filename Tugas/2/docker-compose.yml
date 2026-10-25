@@ -1,0 +1,47 @@
+services:
+  kdc:
+    build: .
+    container_name: ki_kdc
+    stdin_open: true
+    tty: true
+    stop_grace_period: 1s
+    volumes:
+      - .:/app
+    networks:
+      ki_kdc_net:
+        ipv4_address: 172.28.0.10
+    ports:
+      - "5000:5000"
+
+  alice:
+    build: .
+    container_name: ki_alice
+    stdin_open: true
+    tty: true
+    stop_grace_period: 1s
+    volumes:
+      - .:/app
+    networks:
+      ki_kdc_net:
+        ipv4_address: 172.28.0.11
+
+  bob:
+    build: .
+    container_name: ki_bob
+    stdin_open: true
+    tty: true
+    stop_grace_period: 1s
+    volumes:
+      - .:/app
+    networks:
+      ki_kdc_net:
+        ipv4_address: 172.28.0.12
+    ports:
+      - "5001:5001"
+
+networks:
+  ki_kdc_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
