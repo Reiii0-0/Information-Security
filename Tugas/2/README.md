@@ -1,99 +1,102 @@
 # Tugas 2 Keamanan Informasi: Key Distribution Scenario (KDC) & Manual AES
 
-Proyek implementasi skenario distribusi kunci simetris (**Key Distribution Center - KDC**) dan enkripsi komunikasi pesan dua arah menggunakan algoritma **Advanced Encryption Standard (AES) Murni** tanpa library eksternal.
+Implementasi skenario distribusi kunci simetris (**Key Distribution Center - KDC**) 5 langkah (Needham-Schroeder) dan komunikasi pesan dua arah (*full-duplex*) menggunakan algoritma **Advanced Encryption Standard (AES-128) Murni** tanpa library kriptografi eksternal.
 
 ---
 
-## 🎯 Spesifikasi & Ketentuan Tugas
+## 🎯 Spesifikasi & Arsitektur Sistem
 
 1. **3 Entitas Berbeda (3 IP Address):**
-   - **KDC (Key Distribution Center):** Server pihak ketiga tepercaya pemegang *master key* $K_a$ dan $K_b$.
-   - **Alice (Initiator / Node A):** Penginisiasi sesi komunikasi.
-   - **Bob (Responder / Node B):** Penerima inisiasi komunikasi.
-   - Harus berjalan di **3 alamat IP berbeda** (misal: 3 perangkat fisik via LAN/WiFi, atau multi-container/VM).
+   - **KDC (`172.28.0.10:5000`):** Server pihak ketiga tepercaya pemegang *master key* $K_a$ dan $K_b$ serta generator *session key* $K_s$.
+   - **Alice (`172.28.0.11`):** Initiator (Node A) yang memulai request ke KDC dan membuka sesi ke Bob.
+   - **Bob (`172.28.0.12:5001`):** Responder (Node B) yang memvalidasi tiket KDC dan melakukan *mutual authentication*.
 
-2. **Protokol Key Distribution (5 Langkah):**
-   - **Langkah 1 ($A \rightarrow KDC$):** $ID_A \parallel ID_B \parallel N_1$
-   - **Langkah 2 ($KDC \rightarrow A$):** $E(K_a, [K_s \parallel ID_A \parallel ID_B \parallel N_1]) \parallel E(K_b, [K_s \parallel ID_A])$
-   - **Langkah 3 ($A \rightarrow B$):** $E(K_b, [K_s \parallel ID_A])$
-   - **Langkah 4 ($B \rightarrow A$):** $E(K_s, N_2)$ *(Authentication Challenge)*
-   - **Langkah 5 ($A \rightarrow B$):** $E(K_s, f(N_2))$ *(Challenge Response, misal $f(N_2) = N_2 - 1$)*
+2. **Protokol Key Distribution & Mutual Authentication (5 Langkah):**
+   - **Langkah 1 ($A \rightarrow KDC$):** `IDA || IDB || N1` (Plaintext ASCII)
+   - **Langkah 2 ($KDC \rightarrow A$):** $E(K_a, [K_s \parallel ID_A \parallel ID_B \parallel N_1]) \parallel E(K_b, [K_s \parallel ID_A])$ (Hex)
+   - **Langkah 3 ($A \rightarrow B$):** $E(K_b, [K_s \parallel ID_A])$ (Hex)
+   - **Langkah 4 ($B \rightarrow A$):** $E(K_s, N_2)$ *(Authentication Challenge - Hex)*
+   - **Langkah 5 ($A \rightarrow B$):** $E(K_s, f(N_2))$ dengan $f(N_2) = N_2 - 1$ *(Challenge Response - Hex)*
 
-3. **Komunikasi Dua Arah (Full-Duplex):**
-   - Setelah langkah 5 selesai, Alice dan Bob dapat saling mengirim dan menerima pesan secara asinkron (dua arah).
-   - Enkripsi pesan menggunakan session key $K_s$ dengan algoritma **AES**.
-
-4. **Format Data:**
-   - **Plaintext & Key:** Format teks ASCII / UTF-8.
-   - **Ciphertext di Jaringan:** Format Hexadecimal (Hex string).
-   - Kunci dapat diubah secara dinamis dan tidak di-*hardcode*.
-
-5. **Ketentuan Kode & Demo:**
-   - **AES & KDC Murni/Manual:** Dilarang menggunakan library kripto (`pycryptodome`, `cryptography`, dll).
-   - **Wireshark Ready:** Menyiapkan filter interface jaringan untuk membuktikan data terenkripsi (Hex) saat transmisi.
-   - **Demo Tanpa Catatan:** Memahami seluruh proses matematis dan arsitektur kode.
+3. **Komunikasi Dua Arah & Interaktivitas Tanpa Restart:**
+   - Setelah Langkah 5 terverifikasi, Alice dan Bob dapat saling mengirim dan menerima pesan secara simultan (*full-duplex*) dengan enkripsi AES-128 menggunakan $K_s$.
+   - Mendukung perintah interaktif *live* di terminal:
+     - `/keys` : Melihat kunci aktif ($K_a / K_b / K_s$).
+     - `/setkey <ks_baru>` : Mengubah Session Key $K_s$ secara dinamis tanpa mematikan program.
+     - `/setmaster <k_baru>` : Mengubah Master Key $K_a$ / $K_b$ secara dinamis.
+     - `/rekey` : **(Fitur Bonus)** Meminta Session Key $K_s$ baru ke KDC dan menjalankan ulang Langkah 1–5 secara *live*.
 
 ---
 
-## 📁 Rencana Struktur File Tugas 2
+## 📂 Struktur File
 
 ```text
 Tugas/2/
-├── aes_manual.py       # Core Engine AES (SubBytes, ShiftRows, MixColumns, AddRoundKey, KeyExpansion)
-├── aes_utils.py        # Utilitas konversi bit/hex/bytes & PKCS#7 padding
-├── kdc.py              # Server KDC penghasil session key Ks & tiket enkripsi
-├── alice.py            # Node Alice (Initiator handshake & terminal chat)
-├── bob.py              # Node Bob (Responder handshake & terminal chat)
-├── docker-compose.yml  # Opsi virtualisasi 3 node dengan 3 IP statis
-└── README.md           # Panduan eksekusi & pengujian
+├── aes_manual.py       # Core Engine AES-128 Murni (SubBytes, ShiftRows, MixColumns, AddRoundKey, KeyExpansion)
+├── aes_utils.py        # Utilitas konversi matriks 4x4, PKCS#7 padding 16-byte, & Galois Field GF(2^8)
+├── kdc.py              # Server KDC penghasil session key Ks & enkripsi tiket Langkah 1-2
+├── alice.py            # Node Initiator A (Handshake Langkah 1-5, /rekey, & Full-Duplex AES Chat)
+├── bob.py              # Node Responder B (Verifikasi Langkah 3-5 & Full-Duplex AES Chat)
+├── Dockerfile          # Image container Python 3
+├── docker-compose.yml  # Orkestrasi 3 node dengan 3 IP statis (172.28.0.10, .11, .12)
+├── termux_setup.sh     # Skrip eksekusi cepat untuk perangkat fisik kedua/ketiga (Termux/LAN)
+└── README.md           # Dokumentasi eksekusi & pengujian
 ```
 
 ---
 
-## ⏳ Alur Pengerjaan & Timeline Deadline
+## 🚀 Cara Menjalankan (Mode 3 IP via Docker Compose)
 
-> **🚨 HARD DEADLINE PENGUMPULAN:** **Selasa, 27 Oktober 2026 pukul 23.59 WIB**  
-> **Link Pengumpulan:** [Google Form Pengumpulan Tugas 2](https://forms.gle/eS1wGZJM6yjHScKa7)
+```bash
+cd Tugas/2
+docker compose up -d --build
 
-| Fase | Target Tanggal | Fokus Utama | Luaran / Output |
-| :--- | :--- | :--- | :--- |
-| **Fase 1** | **Sabtu, 24 Okt 2026** | **Core AES-128 Manual** | `aes_manual.py` lolos uji enkripsi & dekripsi NIST |
-| **Fase 2** | **Minggu, 25 Okt 2026** | **KDC & Socket Handshake** | Handshake 5 langkah sukses bertukar tiket $K_s$ |
-| **Fase 3** | **Senin, 26 Okt 2026** | **Chat 2 Arah & 3 IP Address** | Alice & Bob chat bolak-balik antar 3 IP berbeda |
-| **Fase 4** | **Selasa, 27 Okt 2026** | **Wireshark, Final Review & Submit** | Rekam Wireshark, hapus komentar contekan, kumpul GForm |
+# Terminal 1 - KDC Server (IP: 172.28.0.10, Port: 5000)
+docker exec -it ki_kdc python kdc.py
+
+# Terminal 2 - Responder Bob (IP: 172.28.0.12, Port: 5001)
+docker exec -it ki_bob python bob.py
+
+# Terminal 3 - Initiator Alice (IP: 172.28.0.11)
+docker exec -it ki_alice python alice.py
+```
+
+### Filter Wireshark untuk Demo:
+```text
+ip.addr == 172.28.0.0/24 && (tcp.port == 5000 || tcp.port == 5001) && tcp.len > 0
+```
+
+Panduan skenario demo selengkapnya dan penjelasan matematis tersedia di [../docs/Panduan_Demo_Tugas2_AES_KDC.md](../docs/Panduan_Demo_Tugas2_AES_KDC.md).
 
 ---
 
-## 📋 Checklist To-Do Proyek (Task List)
+## 📋 Status Checklist Proyek
 
-### 🔹 Fase 1: Engine AES Manual (24 Okt 2026)
-- [ ] Buat tabel S-Box & Inverse S-Box standar AES (`aes_manual.py`)
-- [ ] Implementasi algoritma *Key Expansion* (menghasilkan 11 round keys 128-bit)
-- [ ] Implementasi 4 transformasi ronde: `SubBytes`, `ShiftRows`, `MixColumns`, `AddRoundKey`
-- [ ] Implementasi operasi inverse dekripsi: `InvSubBytes`, `InvShiftRows`, `InvMixColumns`
-- [ ] Implementasi utilitas PKCS#7 padding & konversi string ASCII $\leftrightarrow$ Hex
-- [ ] Unit testing: Validasi hasil enkripsi & dekripsi dengan NIST test vector
+### 🔹 Fase 1: Engine AES Manual
+- [x] Buat tabel S-Box & Inverse S-Box standar AES (`aes_manual.py`)
+- [x] Implementasi algoritma *Key Expansion* (menghasilkan 11 round keys 128-bit)
+- [x] Implementasi 4 transformasi ronde: `SubBytes`, `ShiftRows`, `MixColumns`, `AddRoundKey`
+- [x] Implementasi operasi inverse dekripsi: `InvSubBytes`, `InvShiftRows`, `InvMixColumns`
+- [x] Implementasi utilitas PKCS#7 padding & konversi string ASCII $\leftrightarrow$ Hex
+- [x] Unit testing: Validasi hasil enkripsi & dekripsi dengan NIST test vector
 
-### 🔹 Fase 2: Skenario Distribusi Kunci KDC (25 Okt 2026)
-- [ ] Buat program `kdc.py`: simpan master key $K_a$ dan $K_b$, generator $K_s$ acak
-- [ ] Implementasi **Langkah 1 ($A \rightarrow KDC$)**: Request inisiasi ($ID_A \parallel ID_B \parallel N_1$)
-- [ ] Implementasi **Langkah 2 ($KDC \rightarrow A$)**: Paket terenkripsi $K_a$ dan tiket $K_b$
-- [ ] Implementasi **Langkah 3 ($A \rightarrow B$)**: Alice meneruskan tiket ke Bob
-- [ ] Implementasi **Langkah 4 & 5 (Mutual Auth)**: Challenge $N_2$ & respons $f(N_2) = N_2 - 1$
-- [ ] Verifikasi Bob dan Alice berhasil mendapatkan session key $K_s$ yang identik
+### 🔹 Fase 2: Skenario Distribusi Kunci KDC
+- [x] Buat program `kdc.py`: simpan master key $K_a$ dan $K_b$, generator $K_s$ acak
+- [x] Implementasi **Langkah 1 ($A \rightarrow KDC$)**: Request inisiasi ($ID_A \parallel ID_B \parallel N_1$)
+- [x] Implementasi **Langkah 2 ($KDC \rightarrow A$)**: Paket terenkripsi $K_a$ dan tiket $K_b$
+- [x] Implementasi **Langkah 3 ($A \rightarrow B$)**: Alice meneruskan tiket ke Bob
+- [x] Implementasi **Langkah 4 & 5 (Mutual Auth)**: Challenge $N_2$ & respons $f(N_2) = N_2 - 1$
+- [x] Verifikasi Bob dan Alice berhasil mendapatkan session key $K_s$ yang identik
 
-### 🔹 Fase 3: Komunikasi Dua Arah & Uji Jaringan 3 IP (26 Okt 2026)
-- [ ] Implementasi threading socket di `alice.py` dan `bob.py` (bisa kirim & terima asinkron)
-- [ ] Integrasikan enkripsi pesan chat dengan AES manual menggunakan session key $K_s$
-- [ ] Tampilkan ciphertext di layar pengirim dan penerima dalam format **Hexadecimal**
-- [ ] Fitur interaktif: CLI untuk mengubah pesan dan mengganti key secara dinamis
-- [ ] Buat `docker-compose.yml` (3 container: `kdc`, `alice`, `bob` dengan IP statis 172.28.0.x)
-- [ ] Uji coba komunikasi antar 3 IP address yang berbeda
+### 🔹 Fase 3: Komunikasi Dua Arah & Uji Jaringan 3 IP
+- [x] Implementasi threading socket di `alice.py` dan `bob.py` (bisa kirim & terima asinkron)
+- [x] Integrasikan enkripsi pesan chat dengan AES manual menggunakan session key $K_s$
+- [x] Tampilkan ciphertext di layar pengirim dan penerima dalam format **Hexadecimal**
+- [x] Fitur interaktif: CLI untuk mengubah pesan dan mengganti key secara dinamis
+- [x] Buat `docker-compose.yml` (3 container: `kdc`, `alice`, `bob` dengan IP statis 172.28.0.x)
+- [x] Uji coba komunikasi antar 3 IP address yang berbeda
 
-### 🔹 Fase 4: Validasi Wireshark, Pembersihan & Pengumpulan (27 Okt 2026)
-- [ ] Setup Wireshark: pasang filter port & buktikan payload yang lewat adalah Hex ciphertext
-- [ ] Pastikan tidak ada kebocoran plaintext di paket jaringan Wireshark
-- [ ] Audit kode: bersihkan komentar contekan yang menyerupai catatan (sesuai aturan dosen)
-- [ ] Pastikan riwayat commit mencerminkan kontribusi kedua anggota tim
-- [ ] Push commit final ke repositori GitHub `Reiii0-0/Information-Security`
-- [ ] Submit link repositori ke [Google Form](https://forms.gle/eS1wGZJM6yjHScKa7) sebelum 23.59 WIB
+### 🔹 Fase 4: Validasi Wireshark, Pembersihan & Dokumentasi
+- [x] Setup filter Wireshark & verifikasi payload jaringan berupa Hex ciphertext
+- [x] Pastikan tidak ada kebocoran plaintext di paket jaringan
+- [x] Audit kode: pastikan bebas dari komentar contekan sesuai aturan dosen
